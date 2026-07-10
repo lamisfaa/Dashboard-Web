@@ -68,9 +68,11 @@ export default function AuthModal({ isOpen, mode, onModeChange, onClose, onAuthe
 
   const isSignup = mode === 'signup';
   const isPasswordReset = resetStep !== 'auth';
+  const isTurnstileConfigured = Boolean(import.meta.env.VITE_TURNSTILE_SITE_KEY);
   const isLoginCaptchaRequired = !isSignup && resetStep === 'auth' && loginFailedAttempts >= 3;
   const isPasswordResetCaptchaRequired = resetStep === 'request';
-  const isCaptchaRequired = (isSignup && resetStep === 'auth') || isPasswordResetCaptchaRequired || isLoginCaptchaRequired;
+  const isCaptchaRequired = isTurnstileConfigured
+    && ((isSignup && resetStep === 'auth') || isPasswordResetCaptchaRequired || isLoginCaptchaRequired);
   const canResendOtp = resetStep === 'verify';
 
   const resetTurnstile = () => {
@@ -92,7 +94,7 @@ export default function AuthModal({ isOpen, mode, onModeChange, onClose, onAuthe
       if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) {
         return 'Enter a valid email address.';
       }
-      if (!turnstileToken) {
+      if (isCaptchaRequired && !turnstileToken) {
         return 'Complete CAPTCHA verification.';
       }
       return '';
@@ -233,7 +235,7 @@ export default function AuthModal({ isOpen, mode, onModeChange, onClose, onAuthe
       return;
     }
 
-    if (!turnstileToken) {
+    if (isTurnstileConfigured && !turnstileToken) {
       setError('Complete CAPTCHA verification.');
       return;
     }
@@ -421,7 +423,7 @@ export default function AuthModal({ isOpen, mode, onModeChange, onClose, onAuthe
           {message && <div className="auth-success">{message}</div>}
           {error && <div className="auth-error">{error}</div>}
 
-          {(isCaptchaRequired || canResendOtp) && (
+          {(isCaptchaRequired || (isTurnstileConfigured && canResendOtp)) && (
             <TurnstileWidget
               action={
                 isSignup
