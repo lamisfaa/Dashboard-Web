@@ -13,6 +13,9 @@ const initialForm = {
   confirmNewPassword: ''
 };
 
+const emailPattern = /^\S+@\S+\.\S+$/;
+const gmailPattern = /^[^\s@]+@gmail\.com$/i;
+
 export default function AuthModal({ isOpen, mode, onModeChange, onClose, onAuthenticated, requestedLabel, resetEmail }) {
   const {
     authError,
@@ -91,7 +94,7 @@ export default function AuthModal({ isOpen, mode, onModeChange, onClose, onAuthe
       if (!form.email.trim()) {
         return 'Email is required.';
       }
-      if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) {
+      if (!emailPattern.test(form.email.trim())) {
         return 'Enter a valid email address.';
       }
       if (isCaptchaRequired && !turnstileToken) {
@@ -123,8 +126,11 @@ export default function AuthModal({ isOpen, mode, onModeChange, onClose, onAuthe
     if (!form.email.trim()) {
       return 'Email is required.';
     }
-    if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) {
+    if (!emailPattern.test(form.email.trim())) {
       return 'Enter a valid email address.';
+    }
+    if (isSignup && !gmailPattern.test(form.email.trim())) {
+      return 'Use a valid Gmail address to create an account.';
     }
     if (!form.password) {
       return 'Password is required.';
@@ -227,7 +233,7 @@ export default function AuthModal({ isOpen, mode, onModeChange, onClose, onAuthe
   const handleResendOtp = async () => {
     const validationError = !form.email.trim()
       ? 'Email is required.'
-      : !/^\S+@\S+\.\S+$/.test(form.email.trim())
+      : !emailPattern.test(form.email.trim())
         ? 'Enter a valid email address.'
         : '';
     if (validationError) {
@@ -346,7 +352,7 @@ export default function AuthModal({ isOpen, mode, onModeChange, onClose, onAuthe
                 value={form.email}
                 onChange={(event) => updateField('email', event.target.value)}
                 autoComplete="email"
-                placeholder="name@company.sa"
+                placeholder={isSignup ? 'name@gmail.com' : 'name@example.com'}
               />
             </label>
           )}

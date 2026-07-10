@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import random
+import re
 import secrets
 import smtplib
 import ssl
@@ -36,6 +37,7 @@ GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 GOOGLE_ISSUERS = {"https://accounts.google.com", "accounts.google.com"}
 LOGIN_CAPTCHA_THRESHOLD = 3
 login_failed_attempts: dict[str, int] = {}
+GMAIL_EMAIL_PATTERN = re.compile(r"^[^\s@]+@gmail\.com$")
 
 
 class SignupRequest(BaseModel):
@@ -96,6 +98,14 @@ class MessageResponse(BaseModel):
 
 def normalize_email(email: str) -> str:
     return email.strip().lower()
+
+
+def validate_signup_email(email: str) -> None:
+    if not GMAIL_EMAIL_PATTERN.fullmatch(email):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Use a valid Gmail address to create an account.",
+        )
 
 
 def get_login_failed_attempts(email: str) -> int:
@@ -383,6 +393,8 @@ def find_or_create_google_user(claims: dict):
             connection.commit()
         return get_user_by_id(existing_email_user["id"])
 
+    validate_signup_email(email)
+
     with get_connection() as connection:
         cursor = connection.execute(
             """
@@ -451,6 +463,8 @@ def signup(payload: SignupRequest, request: Request):
 
     full_name = payload.full_name.strip()
     email = normalize_email(payload.email)
+
+    validate_signup_email(email)
 
     if not full_name:
         raise HTTPException(
