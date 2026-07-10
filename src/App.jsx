@@ -1389,7 +1389,7 @@ function App() {
                     <ActivityIcon />
                     <span>{card.label}</span>
                   </div>
-                  <div className="summary-card-content">
+                  <div className="summary-card-content project-custom-graph-content">
                     {renderCustomGraphVisualization(card, data)}
                     {card.note && <p className="project-graph-note">{card.note}</p>}
                   </div>
