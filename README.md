@@ -1,16 +1,57 @@
-# React + Vite
+# Dashboard Web
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+PROJEX dashboard app with a Vite/React frontend and FastAPI backend.
 
-Currently, two official plugins are available:
+## Local Development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Install frontend dependencies:
 
-## React Compiler
+```bash
+npm install
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Run the frontend:
 
-## Expanding the Oxlint configuration
+```bash
+npm run dev -- --host 0.0.0.0
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+Run the backend:
+
+```bash
+cd backend
+./venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Frontend defaults to `http://localhost:5173`.
+Backend defaults to `http://127.0.0.1:8000`.
+
+## Docker
+
+Build and run both services:
+
+```bash
+docker compose up --build
+```
+
+Open:
+
+```text
+Frontend: http://localhost:5173
+Backend:  http://localhost:8000
+```
+
+Stop both services:
+
+```bash
+docker compose down
+```
+
+The Compose setup uses these images:
+
+```text
+lamisfaa/dashboard-web-frontend:latest
+lamisfaa/dashboard-web-backend:latest
+```
+
+Backend secrets should stay in `backend/.env` locally or be provided as environment variables in production. Do not commit real API keys, OAuth secrets, SMTP passwords, or local database files.

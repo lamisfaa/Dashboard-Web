@@ -4,10 +4,11 @@ from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "users.db"
+DB_PATH = Path(os.getenv("USER_DB_PATH", BASE_DIR / "users.db"))
 
 
 def get_connection():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     return connection
