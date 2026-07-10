@@ -27,6 +27,7 @@ dist-ssr
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # Python/backend local artifacts
 __pycache__/
