@@ -551,7 +551,7 @@ export const renderCustomGraphVisualization = (card, data) => {
     });
 
     return (
-      <div className="project-graph-shell">
+      <div className="project-graph-shell project-graph-shell-donut">
         <div className="project-graph-donut" style={{ background: `conic-gradient(${gradientParts.join(', ')})` }}>
           <div>
             <strong>{Math.round(total)}</strong>
@@ -576,7 +576,7 @@ export const renderCustomGraphVisualization = (card, data) => {
   if (graphType === 'stacked') {
     const maxValue = Math.max(...series.map((item) => item.value), 1);
     return (
-      <div className="project-graph-shell">
+      <div className="project-graph-shell project-graph-shell-stacked">
         <div className="project-stacked-bar">
           {series.slice(0, 6).map((item, index) => (
             <div
@@ -617,7 +617,7 @@ export const renderCustomGraphVisualization = (card, data) => {
     const linePoints = points.map((point) => `${point.x},${point.y}`).join(' ');
 
     return (
-      <div className="project-graph-shell">
+      <div className="project-graph-shell project-graph-shell-line">
         <svg viewBox={`0 0 ${width} ${height}`} className="project-graph-svg" role="img" aria-label={card.label}>
           <line x1="20" y1={height - 20} x2={width - 20} y2={height - 20} className="chart-axis" />
           <line x1="20" y1="18" x2="20" y2={height - 20} className="chart-axis" />
@@ -642,7 +642,7 @@ export const renderCustomGraphVisualization = (card, data) => {
   const maxValue = Math.max(...series.map((item) => item.value), 1);
   const barWidth = Math.max((width - 40) / Math.max(series.length, 1) - 10, 18);
   return (
-    <div className="project-graph-shell">
+    <div className="project-graph-shell project-graph-shell-bar">
       <svg viewBox={`0 0 ${width} ${height}`} className="project-graph-svg" role="img" aria-label={card.label}>
         <line x1="20" y1={height - 20} x2={width - 20} y2={height - 20} className="chart-axis" />
         <line x1="20" y1="18" x2="20" y2={height - 20} className="chart-axis" />
