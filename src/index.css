@@ -4058,6 +4058,10 @@ button.overview-kpi-card {
   line-height: 1.45;
 }
 
+.summary-card > .project-graph-note {
+  margin-top: 10px;
+}
+
 @media (max-width: 700px) {
   .project-graph-shell {
     grid-template-columns: 1fr;

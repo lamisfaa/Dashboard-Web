@@ -128,10 +128,30 @@ function PageEditor({ data, onDataSaved, onClose }) {
     });
   };
 
+  const graphConfigKeys = new Set([
+    'sourceTable',
+    'metric',
+    'field',
+    'filterField',
+    'filterValue',
+    'graphType',
+    'groupField'
+  ]);
+
   const updatePageCard = (cardId, patch) => {
     pushEditorUndo();
+    const shouldConvertToGraph = Object.keys(patch).some((key) => graphConfigKeys.has(key));
     setPageCardsDraft((currentCards) => currentCards.map((card) => (
-      card.id === cardId ? { ...card, ...patch } : card
+      card.id === cardId ? {
+        ...card,
+        ...(shouldConvertToGraph ? {
+          type: 'custom-graph',
+          sourceTable: card.sourceTable || 'Projects',
+          metric: card.metric || 'count',
+          graphType: card.graphType || 'bar'
+        } : {}),
+        ...patch
+      } : card
     )));
   };
 
@@ -262,6 +282,7 @@ function PageEditor({ data, onDataSaved, onClose }) {
     setPageCardsDraft((currentCards) => currentCards.map((card) => (
       card.id === cardId ? {
         ...card,
+        type: 'custom-graph',
         label: suggestion.label || card.label,
         sourceTable: suggestion.source_table || card.sourceTable,
         metric: suggestion.metric || card.metric,
@@ -339,7 +360,8 @@ function PageEditor({ data, onDataSaved, onClose }) {
     ? pageFieldsDraft.find((field) => field.id === selectedBlock.id)
     : null;
   const selectedWidgetColumns = selectedWidget?.sourceTable ? getTableColumns(data[selectedWidget.sourceTable] || []) : [];
-  const selectedCardColumns = selectedCard?.sourceTable ? getTableColumns(data[selectedCard.sourceTable] || []) : [];
+  const selectedCardSourceTable = selectedCard?.sourceTable || 'Projects';
+  const effectiveSelectedCardColumns = selectedCard ? getTableColumns(data[selectedCardSourceTable] || []) : [];
 
   const updateHeaderDraft = (patch) => {
     pushEditorUndo();
@@ -491,119 +513,114 @@ function PageEditor({ data, onDataSaved, onClose }) {
           <div className="edit-mode-button-row">
             <button type="button" className="admin-secondary-btn admin-table-action-btn" onClick={() => movePageCard(selectedCard.id, -1)} disabled={cardIndex === 0}>Move left</button>
             <button type="button" className="admin-secondary-btn admin-table-action-btn" onClick={() => movePageCard(selectedCard.id, 1)} disabled={cardIndex === pageCardsDraft.length - 1}>Move right</button>
-            {selectedCard.type === 'custom-graph' && (
-              <button
-                type="button"
-                className="admin-danger-btn admin-table-action-btn"
-                onClick={() => {
-                  pushEditorUndo();
-                  setPageCardsDraft((currentCards) => currentCards.filter((card) => card.id !== selectedCard.id));
-                  setSelectedBlock({ type: 'header' });
-                  setIsInspectorOpen(false);
-                  setMessage('Graph card deleted.');
-                }}
-              >
-                Delete
-              </button>
-            )}
+            <button
+              type="button"
+              className="admin-danger-btn admin-table-action-btn"
+              onClick={() => {
+                pushEditorUndo();
+                setPageCardsDraft((currentCards) => currentCards.filter((card) => card.id !== selectedCard.id));
+                setSelectedBlock({ type: 'header' });
+                setIsInspectorOpen(false);
+                setMessage('Graph card deleted.');
+              }}
+            >
+              Delete
+            </button>
           </div>
-          {selectedCard.type === 'custom-graph' ? (
-            <>
-              <div className="edit-mode-button-row">
-                <button
-                  type="button"
-                  className="admin-secondary-btn"
-                  onClick={async () => {
-                    setAiLoadingTarget(selectedCard.id);
-                    setMessage('');
-                    setError('');
-                    try {
-                      const suggestion = await fetchAutofillSuggestion(selectedCard.label || 'New Graph Card');
-                      applyCardSuggestion(selectedCard.id, suggestion);
-                      setMessage('AI filled the graph card. Review the settings before saving.');
-                    } catch (err) {
-                      setError(err.message || 'Could not autofill graph settings.');
-                    } finally {
-                      setAiLoadingTarget('');
-                    }
-                  }}
-                  disabled={aiLoadingTarget === selectedCard.id}
-                >
-                  {aiLoadingTarget === selectedCard.id ? 'Filling...' : 'Autofill with AI'}
-                </button>
-              </div>
-              <div className="page-editor-two-col">
-                <label className="admin-form-field">
-                  <span>Source table</span>
-                  <select
-                    value={selectedCard.sourceTable || 'Projects'}
-                    onChange={(event) => updatePageCard(selectedCard.id, {
-                      sourceTable: event.target.value,
-                      field: '',
-                      filterField: '',
-                      groupField: ''
-                    })}
-                  >
-                    {sourceTables.map((table) => <option key={table} value={table}>{table}</option>)}
-                  </select>
-                </label>
-                <label className="admin-form-field">
-                  <span>Metric</span>
-                  <select value={selectedCard.metric || 'count'} onChange={(event) => updatePageCard(selectedCard.id, { metric: event.target.value })}>
-                    <option value="count">Count records</option>
-                    <option value="sum">Sum field</option>
-                    <option value="average">Average field</option>
-                  </select>
-                </label>
-              </div>
-              <div className="page-editor-two-col">
-                <label className="admin-form-field">
-                  <span>Graph type</span>
-                  <select value={selectedCard.graphType || 'bar'} onChange={(event) => updatePageCard(selectedCard.id, { graphType: event.target.value })}>
-                    <option value="bar">Bar</option>
-                    <option value="donut">Donut</option>
-                    <option value="stacked">Stacked</option>
-                    <option value="line">Line</option>
-                  </select>
-                </label>
-                <label className="admin-form-field">
-                  <span>Group by field</span>
-                  <select value={selectedCard.groupField || ''} onChange={(event) => updatePageCard(selectedCard.id, { groupField: event.target.value })}>
-                    <option value="">Auto detect</option>
-                    {selectedCardColumns.map((column) => <option key={column} value={column}>{column}</option>)}
-                  </select>
-                </label>
-              </div>
-              {selectedCard.metric !== 'count' && (
-                <label className="admin-form-field">
-                  <span>Metric field</span>
-                  <select value={selectedCard.field || ''} onChange={(event) => updatePageCard(selectedCard.id, { field: event.target.value })}>
-                    <option value="">Select field</option>
-                    {selectedCardColumns.map((column) => <option key={column} value={column}>{column}</option>)}
-                  </select>
-                </label>
-              )}
-              <div className="page-editor-two-col">
-                <label className="admin-form-field">
-                  <span>Filter field</span>
-                  <select value={selectedCard.filterField || ''} onChange={(event) => updatePageCard(selectedCard.id, { filterField: event.target.value })}>
-                    <option value="">No filter</option>
-                    {selectedCardColumns.map((column) => <option key={column} value={column}>{column}</option>)}
-                  </select>
-                </label>
-                <label className="admin-form-field">
-                  <span>Filter value</span>
-                  <input value={selectedCard.filterValue || ''} onChange={(event) => updatePageCard(selectedCard.id, { filterValue: event.target.value })} placeholder="High, IT, etc." />
-                </label>
-              </div>
-              <label className="admin-form-field">
-                <span>Note</span>
-                <input value={selectedCard.note || ''} onChange={(event) => updatePageCard(selectedCard.id, { note: event.target.value })} placeholder="Optional helper text" />
-              </label>
-            </>
-          ) : (
-            <div className="edit-mode-note">This is a built-in graph card. You can rename, hide, and move it here.</div>
+          <div className="edit-mode-button-row">
+            <button
+              type="button"
+              className="admin-secondary-btn"
+              onClick={async () => {
+                setAiLoadingTarget(selectedCard.id);
+                setMessage('');
+                setError('');
+                try {
+                  const suggestion = await fetchAutofillSuggestion(selectedCard.label || 'New Graph Card');
+                  applyCardSuggestion(selectedCard.id, suggestion);
+                  setMessage('AI filled the graph card. Review the settings before saving.');
+                } catch (err) {
+                  setError(err.message || 'Could not autofill graph settings.');
+                } finally {
+                  setAiLoadingTarget('');
+                }
+              }}
+              disabled={aiLoadingTarget === selectedCard.id}
+            >
+              {aiLoadingTarget === selectedCard.id ? 'Filling...' : 'Autofill with AI'}
+            </button>
+          </div>
+          {selectedCard.type !== 'custom-graph' && (
+            <div className="edit-mode-note">Changing graph settings will convert this default card into a fully editable graph card.</div>
           )}
+          <div className="page-editor-two-col">
+            <label className="admin-form-field">
+              <span>Source table</span>
+              <select
+                value={selectedCardSourceTable}
+                onChange={(event) => updatePageCard(selectedCard.id, {
+                  sourceTable: event.target.value,
+                  field: '',
+                  filterField: '',
+                  groupField: ''
+                })}
+              >
+                {sourceTables.map((table) => <option key={table} value={table}>{table}</option>)}
+              </select>
+            </label>
+            <label className="admin-form-field">
+              <span>Metric</span>
+              <select value={selectedCard.metric || 'count'} onChange={(event) => updatePageCard(selectedCard.id, { metric: event.target.value })}>
+                <option value="count">Count records</option>
+                <option value="sum">Sum field</option>
+                <option value="average">Average field</option>
+              </select>
+            </label>
+          </div>
+          <div className="page-editor-two-col">
+            <label className="admin-form-field">
+              <span>Graph type</span>
+              <select value={selectedCard.graphType || 'bar'} onChange={(event) => updatePageCard(selectedCard.id, { graphType: event.target.value })}>
+                <option value="bar">Bar</option>
+                <option value="donut">Donut</option>
+                <option value="stacked">Stacked</option>
+                <option value="line">Line</option>
+              </select>
+            </label>
+            <label className="admin-form-field">
+              <span>Group by field</span>
+              <select value={selectedCard.groupField || ''} onChange={(event) => updatePageCard(selectedCard.id, { groupField: event.target.value })}>
+                <option value="">Auto detect</option>
+                {effectiveSelectedCardColumns.map((column) => <option key={column} value={column}>{column}</option>)}
+              </select>
+            </label>
+          </div>
+          {(selectedCard.metric || 'count') !== 'count' && (
+            <label className="admin-form-field">
+              <span>Metric field</span>
+              <select value={selectedCard.field || ''} onChange={(event) => updatePageCard(selectedCard.id, { field: event.target.value })}>
+                <option value="">Select field</option>
+                {effectiveSelectedCardColumns.map((column) => <option key={column} value={column}>{column}</option>)}
+              </select>
+            </label>
+          )}
+          <div className="page-editor-two-col">
+            <label className="admin-form-field">
+              <span>Filter field</span>
+              <select value={selectedCard.filterField || ''} onChange={(event) => updatePageCard(selectedCard.id, { filterField: event.target.value })}>
+                <option value="">No filter</option>
+                {effectiveSelectedCardColumns.map((column) => <option key={column} value={column}>{column}</option>)}
+              </select>
+            </label>
+            <label className="admin-form-field">
+              <span>Filter value</span>
+              <input value={selectedCard.filterValue || ''} onChange={(event) => updatePageCard(selectedCard.id, { filterValue: event.target.value })} placeholder="High, IT, etc." />
+            </label>
+          </div>
+          <label className="admin-form-field">
+            <span>Note</span>
+            <input value={selectedCard.note || ''} onChange={(event) => updatePageCard(selectedCard.id, { note: event.target.value })} placeholder="Optional helper text" />
+          </label>
         </div>
       );
     }
@@ -755,6 +772,7 @@ function PageEditor({ data, onDataSaved, onClose }) {
                       </div>
                     )}
                   </div>
+                  {card.note && <p className="project-graph-note">{card.note}</p>}
                 </button>
               ))}
             </div>

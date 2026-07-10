@@ -595,6 +595,14 @@ function App() {
   const projectPageOptions = useMemo(() => getEditablePageOptions(projectSettingsRows, 'projects'), [projectSettingsRows]);
   const projectCardFields = useMemo(() => getEditablePageFieldRows(projectSettingsRows, 'projects'), [projectSettingsRows]);
   const visibleProjectFieldIds = useMemo(() => getEnabledFieldIds(projectCardFields), [projectCardFields]);
+  const visibleBuiltinProjectSummaryCardIds = useMemo(() => new Set(
+    projectSummaryCards
+      .filter((card) => card.type !== 'custom-graph' && card.enabled !== false)
+      .map((card) => card.id)
+  ), [projectSummaryCards]);
+  const projectSummaryCardById = useMemo(() => Object.fromEntries(
+    projectSummaryCards.map((card) => [card.id, card])
+  ), [projectSummaryCards]);
   const projectCustomCards = useMemo(() => projectSummaryCards.filter((card) => card.type === 'custom-graph'), [projectSummaryCards]);
 
   const departmentSettingsRows = useMemo(() => getEditablePageSettingsRows(data, 'departments'), [data]);
@@ -1156,7 +1164,7 @@ function App() {
           <div>
             <div className="portfolio-summary-grid">
               {/* CARD 1: PROJECT STATUS DONUT */}
-              {isPageItemEnabled(projectSummaryCards, 'statusDistribution') && (
+              {visibleBuiltinProjectSummaryCardIds.has('statusDistribution') && (
               <div className="glass-card summary-card" style={{ order: getPageItemOrder(projectSummaryCards, 'statusDistribution') }}>
                 <div className="summary-card-title">
                   <ProjectsIcon />
@@ -1252,11 +1260,12 @@ function App() {
                     </div>
                   </div>
                 </div>
+                {projectSummaryCardById.statusDistribution?.note && <p className="project-graph-note">{projectSummaryCardById.statusDistribution.note}</p>}
               </div>
               )}
 
               {/* CARD 2: FINANCIAL HEALTH */}
-              {isPageItemEnabled(projectSummaryCards, 'financialHealth') && (
+              {visibleBuiltinProjectSummaryCardIds.has('financialHealth') && (
               <div className="glass-card summary-card" style={{ order: getPageItemOrder(projectSummaryCards, 'financialHealth') }}>
                 <div className="summary-card-title">
                   <span style={{ color: 'var(--green)' }}>●</span>
@@ -1295,11 +1304,12 @@ function App() {
                     </div>
                   </div>
                 </div>
+                {projectSummaryCardById.financialHealth?.note && <p className="project-graph-note">{projectSummaryCardById.financialHealth.note}</p>}
               </div>
               )}
 
               {/* CARD 3: RISK PROFILE */}
-              {isPageItemEnabled(projectSummaryCards, 'riskProfile') && (
+              {visibleBuiltinProjectSummaryCardIds.has('riskProfile') && (
               <div className="glass-card summary-card" style={{ order: getPageItemOrder(projectSummaryCards, 'riskProfile') }}>
                 <div className="summary-card-title">
                   <ShieldAlertIcon style={{ color: 'var(--red)' }} />
@@ -1359,10 +1369,11 @@ function App() {
                     </div>
                   </div>
                 </div>
+                {projectSummaryCardById.riskProfile?.note && <p className="project-graph-note">{projectSummaryCardById.riskProfile.note}</p>}
               </div>
               )}
 
-              {isPageItemEnabled(projectSummaryCards, 'recentUpdates') && (
+              {visibleBuiltinProjectSummaryCardIds.has('recentUpdates') && (
               <div className="glass-card summary-card" style={{ order: getPageItemOrder(projectSummaryCards, 'recentUpdates') }}>
                 <div className="summary-card-title">
                   <ActivityIcon />
@@ -1380,6 +1391,7 @@ function App() {
                     </div>
                   ))}
                 </div>
+                {projectSummaryCardById.recentUpdates?.note && <p className="project-graph-note">{projectSummaryCardById.recentUpdates.note}</p>}
               </div>
               )}
 

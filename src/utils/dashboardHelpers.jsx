@@ -884,36 +884,48 @@ export const getEditablePageHeaderConfig = (settingsRows, page) => {
 
 export const getEditablePageCardRows = (settingsRows, page) => {
   const defaultCards = PAGE_EDITABLE_DEFAULTS[page]?.cards || [];
+  const hasSavedPageRows = settingsRows.some((row) => row?.Page === page);
   const rows = settingsRows.filter((row) => row?.Page === page && ['summary-card', 'custom-graph'].includes(row?.Type));
-  const mergedCards = defaultCards.map((card, index) => {
-    const saved = rows.find((row) => row['Widget ID'] === card.id);
-    return {
-      id: card.id,
-      type: saved?.Type || 'summary-card',
-      label: saved?.Label || card.label,
-      enabled: normalizeSettingBool(saved?.Enabled, card.enabled),
-      order: Number(saved?.['Sort Order'] || card.order || index + 1)
-    };
-  });
 
-  rows
-    .filter((row) => row?.Type === 'custom-graph' && row['Widget ID'])
-    .forEach((row, index) => {
-      mergedCards.push({
+  if (!hasSavedPageRows) {
+    return defaultCards
+      .map((card, index) => ({
+        id: card.id,
+        type: 'summary-card',
+        label: card.label,
+        enabled: normalizeSettingBool(card.enabled, true),
+        order: Number(card.order || index + 1),
+        sourceTable: '',
+        metric: '',
+        field: '',
+        filterField: '',
+        filterValue: '',
+        graphType: '',
+        groupField: '',
+        note: ''
+      }))
+      .sort((a, b) => a.order - b.order);
+  }
+
+  const mergedCards = rows
+    .filter((row) => row['Widget ID'])
+    .map((row, index) => {
+      const defaultCard = defaultCards.find((card) => card.id === row['Widget ID']);
+      return {
         id: row['Widget ID'],
-        type: 'custom-graph',
-        label: row.Label || 'Untitled graph',
-        enabled: normalizeSettingBool(row.Enabled, true),
-        order: Number(row['Sort Order'] || defaultCards.length + index + 1),
+        type: row.Type || 'summary-card',
+        label: row.Label || defaultCard?.label || 'Untitled graph',
+        enabled: normalizeSettingBool(row.Enabled, defaultCard?.enabled ?? true),
+        order: Number(row['Sort Order'] || defaultCard?.order || index + 1),
         sourceTable: row['Source Table'] || '',
-        metric: row.Metric || 'count',
+        metric: row.Metric || '',
         field: row.Field || '',
         filterField: row['Filter Field'] || '',
         filterValue: row['Filter Value'] || '',
-        graphType: row['Graph Type'] || 'bar',
+        graphType: row['Graph Type'] || '',
         groupField: row['Group Field'] || '',
         note: row.Note || ''
-      });
+      };
     });
 
   return mergedCards.sort((a, b) => a.order - b.order);
@@ -991,7 +1003,10 @@ export const settingsRowsFromEditablePageConfig = (page, header, cards, options,
 ];
 
 export const getPageItem = (items, id) => items.find((item) => item.id === id);
-export const isPageItemEnabled = (items, id) => getPageItem(items, id)?.enabled !== false;
+export const isPageItemEnabled = (items, id) => {
+  const item = getPageItem(items, id);
+  return Boolean(item && item.enabled !== false);
+};
 export const getPageItemLabel = (items, id, fallback) => getPageItem(items, id)?.label || fallback;
 export const getPageItemOrder = (items, id) => getPageItem(items, id)?.order || 99;
 export const getEnabledFieldIds = (fields) => new Set(fields.filter((field) => field.enabled).map((field) => field.id));
