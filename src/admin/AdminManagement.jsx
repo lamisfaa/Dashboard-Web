@@ -24,6 +24,7 @@ function AdminManagement({ data, onDataSaved, onAdminActivity, onPageEditorState
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [downloadingWorkbook, setDownloadingWorkbook] = useState(false);
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState('');
@@ -217,6 +218,33 @@ function AdminManagement({ data, onDataSaved, onAdminActivity, onPageEditorState
     }
   };
 
+  const downloadWorkbook = async () => {
+    setDownloadingWorkbook(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await authFetch(`${API_BASE_URL}/api/admin/workbook`);
+      if (!response.ok) {
+        throw new Error(await parseApiError(response, 'Could not download workbook.'));
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'sample_data.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      setMessage('Downloaded the latest Excel workbook.');
+    } catch (err) {
+      setError(err.message || 'Could not download workbook.');
+    } finally {
+      setDownloadingWorkbook(false);
+    }
+  };
+
   const updateUser = async (targetUser, patch) => {
     setUsersError('');
     try {
@@ -283,6 +311,9 @@ function AdminManagement({ data, onDataSaved, onAdminActivity, onPageEditorState
           </button>
           <button className="admin-secondary-btn" type="button" onClick={undoLastAdminChange} disabled={undoStack.length === 0}>
             Undo
+          </button>
+          <button className="admin-secondary-btn" type="button" onClick={downloadWorkbook} disabled={downloadingWorkbook}>
+            {downloadingWorkbook ? 'Downloading...' : 'Download Excel'}
           </button>
           <button className="admin-primary-btn" type="button" onClick={saveTable} disabled={saving}>
             {saving ? 'Saving...' : 'Save Table'}

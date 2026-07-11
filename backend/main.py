@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -17,7 +18,7 @@ load_dotenv(os.path.join(CURRENT_DIR, ".env"))
 load_dotenv()
 
 from auth import PublicUser, get_current_user, router as auth_router
-from dashboard_store import load_dashboard_data, replace_table
+from dashboard_store import get_excel_workbook_path, load_dashboard_data, replace_table
 from database import get_connection, init_db
 
 # =========================================================================
@@ -497,6 +498,16 @@ def update_dashboard_table(
         "rows": updated_data[table_name],
         "data": updated_data,
     }
+
+
+@app.get("/api/admin/workbook")
+def download_workbook(current_user: PublicUser = Depends(require_admin)):
+    workbook_path = get_excel_workbook_path()
+    return FileResponse(
+        workbook_path,
+        filename="sample_data.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @app.post("/api/admin/page-editor/autofill", response_model=PageWidgetAutofillResponse)

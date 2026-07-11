@@ -16,6 +16,7 @@ services:
     volumes:
       - backend-data:/app/backend/data
       - ./src/data.json:/app/src/data.json
+      - ../sample_data.xlsx:/app/sample_data.xlsx
 
   frontend:
     image: lamisfaa/dashboard-web-frontend:latest

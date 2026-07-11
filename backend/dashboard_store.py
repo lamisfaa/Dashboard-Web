@@ -1,4 +1,6 @@
 import json
+import os
+import shutil
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -8,12 +10,33 @@ from fastapi import HTTPException, status
 
 BASE_DIR = Path(__file__).resolve().parent
 APP_DIR = BASE_DIR.parent
-DATA_PATH = APP_DIR / "src" / "data.json"
-EXCEL_PATH = APP_DIR.parent / "sample_data.xlsx"
+SEED_DATA_PATH = APP_DIR / "src" / "data.json"
+SEED_EXCEL_PATH = APP_DIR.parent / "sample_data.xlsx"
+DASHBOARD_DATA_DIR = os.getenv("DASHBOARD_DATA_DIR", "").strip()
+if DASHBOARD_DATA_DIR:
+    DATA_DIR = Path(DASHBOARD_DATA_DIR)
+    DATA_PATH = DATA_DIR / "data.json"
+    EXCEL_PATH = DATA_DIR / "sample_data.xlsx"
+else:
+    DATA_PATH = SEED_DATA_PATH
+    EXCEL_PATH = SEED_EXCEL_PATH
 ALLOWED_DYNAMIC_TABLES = {"Page Settings"}
 
 
+def ensure_dashboard_files() -> None:
+    DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    if not DATA_PATH.exists() and SEED_DATA_PATH.exists():
+        shutil.copyfile(SEED_DATA_PATH, DATA_PATH)
+
+    if not EXCEL_PATH.exists() and SEED_EXCEL_PATH.exists():
+        EXCEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(SEED_EXCEL_PATH, EXCEL_PATH)
+
+
 def load_dashboard_data() -> dict[str, Any]:
+    ensure_dashboard_files()
+
     if not DATA_PATH.exists():
         raise FileNotFoundError(f"Dashboard data file not found at: {DATA_PATH}")
 
@@ -22,6 +45,8 @@ def load_dashboard_data() -> dict[str, Any]:
 
 
 def save_dashboard_data(data: dict[str, Any]) -> dict[str, Any]:
+    ensure_dashboard_files()
+
     normalized = deepcopy(data)
     DATA_PATH.write_text(
         json.dumps(normalized, indent=2, ensure_ascii=False) + "\n",
@@ -58,6 +83,7 @@ def save_excel_workbook(data: dict[str, Any]) -> None:
             detail="Excel sync requires openpyxl. Install backend requirements before saving admin changes.",
         ) from exc
 
+    EXCEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     workbook = load_workbook(EXCEL_PATH) if EXCEL_PATH.exists() else Workbook()
 
     default_sheet = workbook.active
@@ -90,6 +116,13 @@ def save_excel_workbook(data: dict[str, Any]) -> None:
                     sheet.append([row])
 
     workbook.save(EXCEL_PATH)
+
+
+def get_excel_workbook_path() -> Path:
+    data = load_dashboard_data()
+    if not EXCEL_PATH.exists():
+        save_excel_workbook(data)
+    return EXCEL_PATH
 
 
 def get_columns(rows: list[Any]) -> list[str]:
