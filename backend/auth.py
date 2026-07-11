@@ -316,9 +316,6 @@ def send_email_with_smtp(message: EmailMessage, host: str, port: int, use_ssl: b
 
 
 def send_password_reset_email(email: str, full_name: str, otp: str):
-    smtp_host = os.getenv("SMTP_HOST", "").strip()
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_use_ssl = os.getenv("SMTP_USE_SSL", "").strip().lower() in {"1", "true", "yes"}
     email_from = get_email_from_address()
 
     if not is_email_delivery_configured():
@@ -327,33 +324,37 @@ def send_password_reset_email(email: str, full_name: str, otp: str):
             detail="Password reset email is not configured. Add SMTP settings or RESEND_API_KEY in Render.",
         )
 
-    if os.getenv("RESEND_API_KEY", "").strip():
-        try:
-            send_email_with_resend(email, full_name, otp)
-            return
-        except RuntimeError as exc:
+    try:
+        send_email_with_resend(email, full_name, otp)
+        return
+    except RuntimeError as resend_exc:
+        smtp_host = os.getenv("SMTP_HOST", "").strip()
+        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        smtp_use_ssl = os.getenv("SMTP_USE_SSL", "").strip().lower() in {"1", "true", "yes"}
+        if not smtp_host:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Could not send password reset email with Resend: {exc}",
+                detail=f"Could not send password reset email with Resend: {resend_exc}. No SMTP fallback is configured.",
             ) from None
 
-    message = build_password_reset_message(email, full_name, otp)
-    try:
-        send_email_with_smtp(message, smtp_host, smtp_port, smtp_use_ssl)
-    except (OSError, smtplib.SMTPException) as exc:
-        if smtp_host == "smtp.gmail.com" and smtp_port != 465:
-            try:
-                send_email_with_smtp(message, smtp_host, 465, True)
-                return
-            except (OSError, smtplib.SMTPException) as fallback_exc:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Could not send password reset email: {exc}; Gmail SSL fallback also failed: {fallback_exc}",
-                ) from None
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Could not send password reset email: {exc}",
-        ) from None
+        message = build_password_reset_message(email, full_name, otp)
+        try:
+            send_email_with_smtp(message, smtp_host, smtp_port, smtp_use_ssl)
+            return
+        except (OSError, smtplib.SMTPException) as exc:
+            if smtp_host == "smtp.gmail.com" and smtp_port != 465:
+                try:
+                    send_email_with_smtp(message, smtp_host, 465, True)
+                    return
+                except (OSError, smtplib.SMTPException) as fallback_exc:
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"Could not send password reset email with Resend: {resend_exc}; Gmail SMTP fallback also failed: {exc}; Gmail SSL fallback also failed: {fallback_exc}",
+                    ) from None
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not send password reset email with Resend: {resend_exc}; SMTP fallback also failed: {exc}",
+            ) from None
 
 
 def create_password_reset_otp(user) -> str:
