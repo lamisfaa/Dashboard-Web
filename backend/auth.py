@@ -193,6 +193,17 @@ def get_email_from_address() -> str:
     return os.getenv("EMAIL_FROM", os.getenv("SMTP_USERNAME", "")).strip()
 
 
+def is_email_delivery_configured() -> bool:
+    return all(
+        [
+            os.getenv("SMTP_HOST", "").strip(),
+            os.getenv("SMTP_USERNAME", "").strip(),
+            os.getenv("SMTP_PASSWORD", "").strip(),
+            get_email_from_address(),
+        ]
+    )
+
+
 def create_reset_otp() -> str:
     return f"{random.SystemRandom().randint(0, 999999):06d}"
 
@@ -204,10 +215,10 @@ def send_password_reset_email(email: str, full_name: str, otp: str):
     smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
     email_from = get_email_from_address()
 
-    if not smtp_host or not smtp_username or not smtp_password or not email_from:
+    if not is_email_delivery_configured():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Password reset email is not configured. Add SMTP settings to backend/.env.",
+            detail="Password reset email is not configured. Add SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, and EMAIL_FROM in Render.",
         )
 
     message = EmailMessage()
@@ -232,10 +243,10 @@ def send_password_reset_email(email: str, full_name: str, otp: str):
             server.starttls(context=context)
             server.login(smtp_username, smtp_password)
             server.send_message(message)
-    except (OSError, smtplib.SMTPException):
+    except (OSError, smtplib.SMTPException) as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Could not send password reset email.",
+            detail=f"Could not send password reset email: {exc}",
         ) from None
 
 
@@ -532,10 +543,12 @@ def request_password_reset(payload: PasswordResetRequest, request: Request):
 
     email = normalize_email(payload.email)
     user = get_user_by_email(email)
-    generic_message = "If an email/password account exists, an OTP has been sent."
 
     if not user:
-        return PasswordResetStartResponse(message=generic_message)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account exists with this email address.",
+        )
 
     if not user["is_active"]:
         raise HTTPException(
@@ -545,7 +558,7 @@ def request_password_reset(payload: PasswordResetRequest, request: Request):
 
     otp = create_password_reset_otp(user)
     send_password_reset_email(user["email"], user["full_name"], otp)
-    return PasswordResetStartResponse(message=generic_message)
+    return PasswordResetStartResponse(message="OTP sent. Check your email.")
 
 
 @router.post("/password-reset/verify", response_model=MessageResponse)

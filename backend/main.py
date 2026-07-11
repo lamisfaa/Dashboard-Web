@@ -17,7 +17,7 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(CURRENT_DIR, ".env"))
 load_dotenv()
 
-from auth import PublicUser, get_current_user, router as auth_router
+from auth import PublicUser, get_current_user, is_email_delivery_configured, router as auth_router
 from dashboard_store import get_excel_workbook_path, load_dashboard_data, replace_table
 from database import get_connection, init_db
 
@@ -482,6 +482,7 @@ def health_check():
         "status": "healthy",
         "data_loaded": True,
         "api_key_configured": bool(api_key),
+        "email_configured": is_email_delivery_configured(),
         "data_size_chars": len(dataset_csv_str)
     }
 

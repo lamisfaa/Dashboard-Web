@@ -33,6 +33,21 @@ SMTP_PASSWORD=...
 EMAIL_FROM=...
 ```
 
+For password reset emails with Gmail, add these in Render under
+Environment > Environment Variables:
+
+```text
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your_sender_email@gmail.com
+SMTP_PASSWORD=your_16_character_gmail_app_password
+EMAIL_FROM=your_sender_email@gmail.com
+```
+
+`SMTP_PASSWORD` must be a Gmail App Password, not the normal Gmail login
+password. In Google Account settings, enable 2-Step Verification, then create
+an App Password for Mail.
+
 After Render deploys, copy the backend URL. It will look like:
 
 ```text
@@ -43,6 +58,14 @@ Check:
 
 ```text
 https://dashboard-web-backend.onrender.com/api/health
+```
+
+The health response should include:
+
+```json
+{
+  "email_configured": true
+}
 ```
 
 ## 2. Deploy Frontend on Vercel
