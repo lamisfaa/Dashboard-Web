@@ -4168,6 +4168,24 @@ button.overview-kpi-card {
   overflow: hidden;
 }
 
+.admin-export-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-export-card h3 {
+  color: var(--text-main);
+  margin-top: 8px;
+}
+
+.admin-export-card p {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 6px;
+}
+
 .admin-section-heading {
   display: flex;
   align-items: center;
@@ -4391,6 +4409,11 @@ button.overview-kpi-card {
 
   .admin-command-actions > * {
     flex: 1 1 160px;
+  }
+
+  .admin-export-card {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .profile-hero {

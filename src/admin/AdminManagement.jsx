@@ -327,6 +327,17 @@ function AdminManagement({ data, onDataSaved, onAdminActivity, onPageEditorState
         </div>
       )}
 
+      <section className="glass-card admin-export-card">
+        <div>
+          <span className="admin-eyebrow">Live workbook</span>
+          <h3>Excel export</h3>
+          <p>Download the latest workbook after saving admin changes.</p>
+        </div>
+        <button className="admin-primary-btn" type="button" onClick={downloadWorkbook} disabled={downloadingWorkbook}>
+          {downloadingWorkbook ? 'Downloading...' : 'Download Excel Sheet'}
+        </button>
+      </section>
+
       <section className="glass-card admin-table-card">
         <div className="admin-section-heading">
           <div>
