@@ -51,10 +51,17 @@ https://dashboard-web-backend.onrender.com/api/health
 2. Use the Vite defaults:
    - Build command: `npm run build`
    - Output directory: `dist`
-3. Add this Vercel environment variable:
+3. Add this Vercel environment variable if your Render backend URL is not
+   `https://dashboard-web-backend.onrender.com`:
 
 ```text
 VITE_API_BASE_URL=https://your-render-backend-url.onrender.com
+```
+
+If this value is missing, production builds default to:
+
+```text
+https://dashboard-web-backend.onrender.com
 ```
 
 Deploy the frontend and copy the Vercel URL.
