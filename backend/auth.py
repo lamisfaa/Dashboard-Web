@@ -195,7 +195,8 @@ def get_email_from_address() -> str:
 
 
 def is_email_delivery_configured() -> bool:
-    return all(
+    resend_configured = bool(os.getenv("RESEND_API_KEY", "").strip() and get_email_from_address())
+    smtp_configured = all(
         [
             os.getenv("SMTP_HOST", "").strip(),
             os.getenv("SMTP_USERNAME", "").strip(),
@@ -203,6 +204,7 @@ def is_email_delivery_configured() -> bool:
             get_email_from_address(),
         ]
     )
+    return resend_configured or smtp_configured
 
 
 def create_reset_otp() -> str:
@@ -237,23 +239,10 @@ class IPv4SMTP_SSL(smtplib.SMTP_SSL):
         return self.context.wrap_socket(raw_socket, server_hostname=host)
 
 
-def send_password_reset_email(email: str, full_name: str, otp: str):
-    smtp_host = os.getenv("SMTP_HOST", "").strip()
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_use_ssl = os.getenv("SMTP_USE_SSL", "").strip().lower() in {"1", "true", "yes"}
-    smtp_username = os.getenv("SMTP_USERNAME", "").strip()
-    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
-    email_from = get_email_from_address()
-
-    if not is_email_delivery_configured():
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Password reset email is not configured. Add SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, and EMAIL_FROM in Render.",
-        )
-
+def build_password_reset_message(email: str, full_name: str, otp: str) -> EmailMessage:
     message = EmailMessage()
     message["Subject"] = "Your PROJEX password reset OTP"
-    message["From"] = email_from
+    message["From"] = get_email_from_address()
     message["To"] = email
     message.set_content(
         "\n".join(
@@ -266,21 +255,101 @@ def send_password_reset_email(email: str, full_name: str, otp: str):
             ]
         )
     )
+    return message
 
-    context = ssl.create_default_context()
+
+def send_email_with_resend(email: str, full_name: str, otp: str) -> None:
+    api_key = os.getenv("RESEND_API_KEY", "").strip()
+    email_from = get_email_from_address()
+    if not api_key:
+        raise RuntimeError("RESEND_API_KEY is not configured.")
+
+    payload = __import__("json").dumps(
+        {
+            "from": email_from,
+            "to": [email],
+            "subject": "Your PROJEX password reset OTP",
+            "text": "\n".join(
+                [
+                    f"Hello {full_name},",
+                    "",
+                    f"Your PROJEX password reset OTP is: {otp}",
+                    "",
+                    "This code expires in 10 minutes. If you did not request this, ignore this email.",
+                ]
+            ),
+        }
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
     try:
-        smtp_class = IPv4SMTP_SSL if smtp_use_ssl or smtp_port == 465 else IPv4SMTP
-        server = (
-            smtp_class(smtp_host, smtp_port, timeout=15, context=context)
-            if smtp_class is IPv4SMTP_SSL
-            else smtp_class(smtp_host, smtp_port, timeout=15)
+        with urllib.request.urlopen(request, timeout=20) as response:
+            if response.status >= 400:
+                raise RuntimeError(f"Resend returned HTTP {response.status}.")
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError) as exc:
+        raise RuntimeError(exc) from exc
+
+
+def send_email_with_smtp(message: EmailMessage, host: str, port: int, use_ssl: bool) -> None:
+    context = ssl.create_default_context()
+    smtp_username = os.getenv("SMTP_USERNAME", "").strip()
+    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
+    timeout_seconds = int(os.getenv("SMTP_TIMEOUT_SECONDS", "30"))
+    smtp_class = IPv4SMTP_SSL if use_ssl or port == 465 else IPv4SMTP
+    server = (
+        smtp_class(host, port, timeout=timeout_seconds, context=context)
+        if smtp_class is IPv4SMTP_SSL
+        else smtp_class(host, port, timeout=timeout_seconds)
+    )
+    with server:
+        if smtp_class is IPv4SMTP:
+            server.starttls(context=context)
+        server.login(smtp_username, smtp_password)
+        server.send_message(message)
+
+
+def send_password_reset_email(email: str, full_name: str, otp: str):
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_use_ssl = os.getenv("SMTP_USE_SSL", "").strip().lower() in {"1", "true", "yes"}
+    email_from = get_email_from_address()
+
+    if not is_email_delivery_configured():
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Password reset email is not configured. Add SMTP settings or RESEND_API_KEY in Render.",
         )
-        with server:
-            if smtp_class is IPv4SMTP:
-                server.starttls(context=context)
-            server.login(smtp_username, smtp_password)
-            server.send_message(message)
+
+    if os.getenv("RESEND_API_KEY", "").strip():
+        try:
+            send_email_with_resend(email, full_name, otp)
+            return
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Could not send password reset email with Resend: {exc}",
+            ) from None
+
+    message = build_password_reset_message(email, full_name, otp)
+    try:
+        send_email_with_smtp(message, smtp_host, smtp_port, smtp_use_ssl)
     except (OSError, smtplib.SMTPException) as exc:
+        if smtp_host == "smtp.gmail.com" and smtp_port != 465:
+            try:
+                send_email_with_smtp(message, smtp_host, 465, True)
+                return
+            except (OSError, smtplib.SMTPException) as fallback_exc:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Could not send password reset email: {exc}; Gmail SSL fallback also failed: {fallback_exc}",
+                ) from None
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Could not send password reset email: {exc}",

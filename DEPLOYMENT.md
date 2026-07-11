@@ -63,6 +63,16 @@ SMTP_PORT=465
 SMTP_USE_SSL=true
 ```
 
+If Render still times out on SMTP, use Resend instead:
+
+```text
+RESEND_API_KEY=re_...
+EMAIL_FROM=PROJEX <onboarding@resend.dev>
+```
+
+For production sending to arbitrary recipients, verify your own domain in
+Resend and use that domain in `EMAIL_FROM`.
+
 `SMTP_PASSWORD` must be a Gmail App Password, not the normal Gmail login
 password. In Google Account settings, enable 2-Step Verification, then create
 an App Password for Mail.
