@@ -38,21 +38,49 @@ Optional variables for extra features:
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URI=https://your-render-backend-url.onrender.com/api/auth/google/callback
-RESEND_API_KEY=...
-EMAIL_FROM=PROJEX <onboarding@resend.dev>
+```
+
+Email settings for Gmail SMTP:
+
+```text
+EMAIL_PROVIDER=smtp
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USE_SSL=true
+SMTP_USERNAME=lamis.fa09@gmail.com
+SMTP_PASSWORD=your Gmail App Password
+EMAIL_FROM=lamis.fa09@gmail.com
 ```
 
 For password reset emails on Render, add these in Environment > Environment
-Variables:
+Variables if you want to send through Gmail:
+
+```text
+EMAIL_PROVIDER=smtp
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USE_SSL=true
+SMTP_USERNAME=lamis.fa09@gmail.com
+SMTP_PASSWORD=your-16-character-gmail-app-password
+EMAIL_FROM=lamis.fa09@gmail.com
+```
+
+Use a Gmail App Password for `SMTP_PASSWORD`; your normal Gmail password will
+not work. In Google Account settings, enable 2-Step Verification, then create an
+App Password for this backend.
+
+If you later use Resend instead, add:
 
 ```text
 RESEND_API_KEY=re_...
-EMAIL_FROM=PROJEX <onboarding@resend.dev>
+EMAIL_FROM=PROJEX <noreply@your-verified-domain.com>
 ```
 
 For production sending to arbitrary recipients, verify your own domain in
-Resend and use that domain in `EMAIL_FROM`.
-Resend uses HTTPS, so it avoids the SMTP timeout problem on Render.
+Resend and use that domain in `EMAIL_FROM`. `onboarding@resend.dev` is a
+Resend testing sender and can be rejected for normal app users with eligibility
+or sender-domain errors. Resend uses HTTPS, so it avoids the SMTP timeout
+problem on Render.
 
 After Render deploys, copy the backend URL. It will look like:
 
@@ -71,6 +99,18 @@ The health response should include:
 ```json
 {
   "email_configured": true,
+  "email": {
+    "configured": true,
+    "provider": "smtp",
+    "smtp_host_present": true,
+    "smtp_port": 465,
+    "smtp_username_present": true,
+    "smtp_password_present": true,
+    "smtp_use_ssl": true,
+    "resend_api_key_present": false,
+    "email_from_present": true,
+    "uses_resend_testing_sender": false
+  },
   "database": {
     "path": "/app/backend/data/users.db",
     "is_persistent_path": true,

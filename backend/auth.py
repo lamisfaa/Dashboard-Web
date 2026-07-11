@@ -1,12 +1,16 @@
 import sqlite3
+import json
 import os
 import random
 import re
 import secrets
+import smtplib
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -190,34 +194,142 @@ def get_email_from_address() -> str:
     return os.getenv("EMAIL_FROM", "").strip()
 
 
+def get_email_provider() -> str:
+    provider = os.getenv("EMAIL_PROVIDER", "").strip().lower()
+    if provider in {"smtp", "resend"}:
+        return provider
+    if is_smtp_delivery_configured():
+        return "smtp"
+    return "resend"
+
+
+def get_smtp_host() -> str:
+    return os.getenv("SMTP_HOST", "smtp.gmail.com").strip()
+
+
+def get_smtp_port() -> int:
+    try:
+        return int(os.getenv("SMTP_PORT", "465").strip())
+    except ValueError:
+        return 465
+
+
+def get_smtp_username() -> str:
+    return os.getenv("SMTP_USERNAME", "").strip()
+
+
+def get_smtp_password() -> str:
+    return os.getenv("SMTP_PASSWORD", "").strip()
+
+
+def should_use_smtp_ssl() -> bool:
+    raw_value = os.getenv("SMTP_USE_SSL", "").strip().lower()
+    if raw_value in {"0", "false", "no"}:
+        return False
+    if raw_value in {"1", "true", "yes"}:
+        return True
+    return get_smtp_port() == 465
+
+
+def is_placeholder_value(value: str) -> bool:
+    return not value or value.startswith("your_")
+
+
+def is_resend_delivery_configured() -> bool:
+    api_key = os.getenv("RESEND_API_KEY", "").strip()
+    return bool(not is_placeholder_value(api_key) and get_email_from_address())
+
+
+def is_smtp_delivery_configured() -> bool:
+    username = get_smtp_username()
+    password = get_smtp_password()
+    return bool(
+        get_smtp_host()
+        and username
+        and not is_placeholder_value(username)
+        and password
+        and not is_placeholder_value(password)
+    )
+
+
 def is_email_delivery_configured() -> bool:
-    return bool(os.getenv("RESEND_API_KEY", "").strip() and get_email_from_address())
+    provider = get_email_provider()
+    if provider == "smtp":
+        return is_smtp_delivery_configured()
+    return is_resend_delivery_configured()
+
+
+def get_email_delivery_status() -> dict:
+    api_key = os.getenv("RESEND_API_KEY", "").strip()
+    email_from = get_email_from_address()
+    smtp_username = get_smtp_username()
+    return {
+        "configured": is_email_delivery_configured(),
+        "provider": get_email_provider(),
+        "resend_api_key_present": bool(api_key),
+        "resend_api_key_placeholder": bool(api_key and is_placeholder_value(api_key)),
+        "email_from_present": bool(email_from),
+        "uses_resend_testing_sender": "onboarding@resend.dev" in email_from.lower(),
+        "smtp_host_present": bool(get_smtp_host()),
+        "smtp_port": get_smtp_port(),
+        "smtp_username_present": bool(smtp_username),
+        "smtp_username_placeholder": bool(smtp_username and is_placeholder_value(smtp_username)),
+        "smtp_password_present": bool(get_smtp_password()),
+        "smtp_use_ssl": should_use_smtp_ssl(),
+    }
+
+
+def get_resend_error_message(exc: urllib.error.HTTPError) -> str:
+    try:
+        body = exc.read().decode("utf-8")
+    except Exception:
+        body = ""
+
+    if body:
+        try:
+            payload = json.loads(body)
+            message = payload.get("message") or payload.get("error")
+            if message:
+                return f"Resend returned HTTP {exc.code}: {message}"
+        except (TypeError, ValueError):
+            return f"Resend returned HTTP {exc.code}: {body[:300]}"
+
+    return f"Resend returned HTTP {exc.code}."
 
 
 def create_reset_otp() -> str:
     return f"{random.SystemRandom().randint(0, 999999):06d}"
 
 
+def build_password_reset_message(email: str, full_name: str, otp: str) -> tuple[str, str]:
+    subject = "Your PROJEX password reset OTP"
+    text = "\n".join(
+        [
+            f"Hello {full_name},",
+            "",
+            f"Your PROJEX password reset OTP is: {otp}",
+            "",
+            "This code expires in 10 minutes. If you did not request this, ignore this email.",
+        ]
+    )
+    return subject, text
+
+
 def send_email_with_resend(email: str, full_name: str, otp: str) -> None:
     api_key = os.getenv("RESEND_API_KEY", "").strip()
     email_from = get_email_from_address()
-    if not api_key:
+    if is_placeholder_value(api_key):
         raise RuntimeError("RESEND_API_KEY is not configured.")
+    if not email_from:
+        raise RuntimeError("EMAIL_FROM is not configured.")
 
-    payload = __import__("json").dumps(
+    subject, text = build_password_reset_message(email, full_name, otp)
+    payload = json.dumps(
         {
             "from": email_from,
             "to": [email],
-            "subject": "Your PROJEX password reset OTP",
-            "text": "\n".join(
-                [
-                    f"Hello {full_name},",
-                    "",
-                    f"Your PROJEX password reset OTP is: {otp}",
-                    "",
-                    "This code expires in 10 minutes. If you did not request this, ignore this email.",
-                ]
-            ),
+            "subject": subject,
+            "text": text,
         }
     ).encode("utf-8")
     request = urllib.request.Request(
@@ -233,29 +345,76 @@ def send_email_with_resend(email: str, full_name: str, otp: str) -> None:
         with urllib.request.urlopen(request, timeout=20) as response:
             if response.status >= 400:
                 raise RuntimeError(f"Resend returned HTTP {response.status}.")
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError) as exc:
-        raise RuntimeError(exc) from exc
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(get_resend_error_message(exc)) from exc
+    except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", exc)
+        raise RuntimeError(f"Could not reach Resend: {reason}") from exc
+    except TimeoutError as exc:
+        raise RuntimeError("Timed out while contacting Resend.") from exc
+    except ValueError as exc:
+        raise RuntimeError(f"Invalid Resend response: {exc}") from exc
+
+
+def send_email_with_smtp(email: str, full_name: str, otp: str) -> None:
+    host = get_smtp_host()
+    port = get_smtp_port()
+    username = get_smtp_username()
+    password = get_smtp_password()
+    email_from = get_email_from_address() or username
+
+    if not is_smtp_delivery_configured():
+        raise RuntimeError("SMTP email is not configured. Add SMTP_USERNAME and SMTP_PASSWORD in Render.")
+
+    subject, text = build_password_reset_message(email, full_name, otp)
+    message = EmailMessage()
+    message["From"] = email_from
+    message["To"] = email
+    message["Subject"] = subject
+    message.set_content(text)
+
+    try:
+        if should_use_smtp_ssl():
+            context = ssl.create_default_context()
+            with smtplib.SMTP_SSL(host, port, timeout=20, context=context) as server:
+                server.login(username, password)
+                server.send_message(message)
+            return
+
+        with smtplib.SMTP(host, port, timeout=20) as server:
+            server.ehlo()
+            server.starttls(context=ssl.create_default_context())
+            server.ehlo()
+            server.login(username, password)
+            server.send_message(message)
+    except smtplib.SMTPAuthenticationError as exc:
+        raise RuntimeError("Gmail rejected SMTP login. Use a Gmail App Password, not your normal password.") from exc
+    except (smtplib.SMTPException, OSError, TimeoutError) as exc:
+        raise RuntimeError(f"Could not send SMTP email through {host}:{port}: {exc}") from exc
 
 
 def send_password_reset_email(email: str, full_name: str, otp: str):
     if not is_email_delivery_configured():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Password reset email is not configured. Add RESEND_API_KEY and EMAIL_FROM in Render.",
+            detail="Password reset email is not configured. Add Gmail SMTP or Resend email settings in Render.",
         )
 
+    provider = get_email_provider()
     try:
-        send_email_with_resend(email, full_name, otp)
+        if provider == "smtp":
+            send_email_with_smtp(email, full_name, otp)
+        else:
+            send_email_with_resend(email, full_name, otp)
         return
-    except RuntimeError as resend_exc:
+    except RuntimeError as email_exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Could not send password reset email with Resend: {resend_exc}",
+            detail=f"Could not send password reset email with {provider}: {email_exc}",
         ) from None
 
 
-def create_password_reset_otp(user) -> str:
-    otp = create_reset_otp()
+def store_password_reset_otp(user, otp: str) -> None:
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
     with get_connection() as connection:
         connection.execute(
@@ -274,7 +433,6 @@ def create_password_reset_otp(user) -> str:
             (user["id"], hash_password(otp), expires_at.isoformat()),
         )
         connection.commit()
-    return otp
 
 
 def get_active_password_reset_otp(user_id: int):
@@ -560,8 +718,9 @@ def request_password_reset(payload: PasswordResetRequest, request: Request):
             detail="This account is disabled.",
         )
 
-    otp = create_password_reset_otp(user)
+    otp = create_reset_otp()
     send_password_reset_email(user["email"], user["full_name"], otp)
+    store_password_reset_otp(user, otp)
     return PasswordResetStartResponse(message="OTP sent. Check your email.")
 
 
