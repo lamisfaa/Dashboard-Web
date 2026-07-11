@@ -38,33 +38,12 @@ Optional variables for extra features:
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URI=https://your-render-backend-url.onrender.com/api/auth/google/callback
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=...
-SMTP_PASSWORD=...
-EMAIL_FROM=...
 RESEND_API_KEY=...
+EMAIL_FROM=PROJEX <onboarding@resend.dev>
 ```
 
-For password reset emails with Gmail, add these in Render under
-Environment > Environment Variables:
-
-```text
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your_sender_email@gmail.com
-SMTP_PASSWORD=your_16_character_gmail_app_password
-EMAIL_FROM=your_sender_email@gmail.com
-```
-
-If port `587` fails on the host, switch to Gmail SSL SMTP:
-
-```text
-SMTP_PORT=465
-SMTP_USE_SSL=true
-```
-
-If Render still times out on SMTP, use Resend instead:
+For password reset emails on Render, add these in Environment > Environment
+Variables:
 
 ```text
 RESEND_API_KEY=re_...
@@ -73,13 +52,7 @@ EMAIL_FROM=PROJEX <onboarding@resend.dev>
 
 For production sending to arbitrary recipients, verify your own domain in
 Resend and use that domain in `EMAIL_FROM`.
-
-Resend is the preferred option on Render because it uses HTTPS instead of
-SMTP ports that may be blocked or time out.
-
-`SMTP_PASSWORD` must be a Gmail App Password, not the normal Gmail login
-password. In Google Account settings, enable 2-Step Verification, then create
-an App Password for Mail.
+Resend uses HTTPS, so it avoids the SMTP timeout problem on Render.
 
 After Render deploys, copy the backend URL. It will look like:
 

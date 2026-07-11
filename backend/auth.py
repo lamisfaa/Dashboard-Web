@@ -3,14 +3,10 @@ import os
 import random
 import re
 import secrets
-import smtplib
-import socket
-import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
-from email.message import EmailMessage
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -191,71 +187,15 @@ def get_google_recovery_url() -> str:
 
 
 def get_email_from_address() -> str:
-    return os.getenv("EMAIL_FROM", os.getenv("SMTP_USERNAME", "")).strip()
+    return os.getenv("EMAIL_FROM", "").strip()
 
 
 def is_email_delivery_configured() -> bool:
-    resend_configured = bool(os.getenv("RESEND_API_KEY", "").strip() and get_email_from_address())
-    smtp_configured = all(
-        [
-            os.getenv("SMTP_HOST", "").strip(),
-            os.getenv("SMTP_USERNAME", "").strip(),
-            os.getenv("SMTP_PASSWORD", "").strip(),
-            get_email_from_address(),
-        ]
-    )
-    return resend_configured or smtp_configured
+    return bool(os.getenv("RESEND_API_KEY", "").strip() and get_email_from_address())
 
 
 def create_reset_otp() -> str:
     return f"{random.SystemRandom().randint(0, 999999):06d}"
-
-
-class IPv4SMTP(smtplib.SMTP):
-    def _get_socket(self, host, port, timeout):
-        last_error = None
-        for family, socktype, proto, _, address in socket.getaddrinfo(
-            host,
-            port,
-            socket.AF_INET,
-            socket.SOCK_STREAM,
-        ):
-            sock = socket.socket(family, socktype, proto)
-            sock.settimeout(timeout)
-            try:
-                sock.connect(address)
-                return sock
-            except OSError as exc:
-                last_error = exc
-                sock.close()
-        if last_error:
-            raise last_error
-        raise OSError(f"Could not resolve IPv4 address for {host}.")
-
-
-class IPv4SMTP_SSL(smtplib.SMTP_SSL):
-    def _get_socket(self, host, port, timeout):
-        raw_socket = IPv4SMTP._get_socket(self, host, port, timeout)
-        return self.context.wrap_socket(raw_socket, server_hostname=host)
-
-
-def build_password_reset_message(email: str, full_name: str, otp: str) -> EmailMessage:
-    message = EmailMessage()
-    message["Subject"] = "Your PROJEX password reset OTP"
-    message["From"] = get_email_from_address()
-    message["To"] = email
-    message.set_content(
-        "\n".join(
-            [
-                f"Hello {full_name},",
-                "",
-                f"Your PROJEX password reset OTP is: {otp}",
-                "",
-                "This code expires in 10 minutes. If you did not request this, ignore this email.",
-            ]
-        )
-    )
-    return message
 
 
 def send_email_with_resend(email: str, full_name: str, otp: str) -> None:
@@ -297,64 +237,21 @@ def send_email_with_resend(email: str, full_name: str, otp: str) -> None:
         raise RuntimeError(exc) from exc
 
 
-def send_email_with_smtp(message: EmailMessage, host: str, port: int, use_ssl: bool) -> None:
-    context = ssl.create_default_context()
-    smtp_username = os.getenv("SMTP_USERNAME", "").strip()
-    smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
-    timeout_seconds = int(os.getenv("SMTP_TIMEOUT_SECONDS", "30"))
-    smtp_class = IPv4SMTP_SSL if use_ssl or port == 465 else IPv4SMTP
-    server = (
-        smtp_class(host, port, timeout=timeout_seconds, context=context)
-        if smtp_class is IPv4SMTP_SSL
-        else smtp_class(host, port, timeout=timeout_seconds)
-    )
-    with server:
-        if smtp_class is IPv4SMTP:
-            server.starttls(context=context)
-        server.login(smtp_username, smtp_password)
-        server.send_message(message)
-
-
 def send_password_reset_email(email: str, full_name: str, otp: str):
-    email_from = get_email_from_address()
-
     if not is_email_delivery_configured():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Password reset email is not configured. Add SMTP settings or RESEND_API_KEY in Render.",
+            detail="Password reset email is not configured. Add RESEND_API_KEY and EMAIL_FROM in Render.",
         )
 
     try:
         send_email_with_resend(email, full_name, otp)
         return
     except RuntimeError as resend_exc:
-        smtp_host = os.getenv("SMTP_HOST", "").strip()
-        smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        smtp_use_ssl = os.getenv("SMTP_USE_SSL", "").strip().lower() in {"1", "true", "yes"}
-        if not smtp_host:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Could not send password reset email with Resend: {resend_exc}. No SMTP fallback is configured.",
-            ) from None
-
-        message = build_password_reset_message(email, full_name, otp)
-        try:
-            send_email_with_smtp(message, smtp_host, smtp_port, smtp_use_ssl)
-            return
-        except (OSError, smtplib.SMTPException) as exc:
-            if smtp_host == "smtp.gmail.com" and smtp_port != 465:
-                try:
-                    send_email_with_smtp(message, smtp_host, 465, True)
-                    return
-                except (OSError, smtplib.SMTPException) as fallback_exc:
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail=f"Could not send password reset email with Resend: {resend_exc}; Gmail SMTP fallback also failed: {exc}; Gmail SSL fallback also failed: {fallback_exc}",
-                    ) from None
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Could not send password reset email with Resend: {resend_exc}; SMTP fallback also failed: {exc}",
-            ) from None
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Could not send password reset email with Resend: {resend_exc}",
+        ) from None
 
 
 def create_password_reset_otp(user) -> str:
