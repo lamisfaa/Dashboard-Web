@@ -14,6 +14,14 @@ def get_turnstile_secret_key() -> str:
     return os.getenv("TURNSTILE_SECRET_KEY", "").strip()
 
 
+def is_turnstile_enabled() -> bool:
+    return os.getenv("TURNSTILE_ENABLED", "").strip().lower() == "true"
+
+
+def is_turnstile_required() -> bool:
+    return os.getenv("TURNSTILE_REQUIRED", "").strip().lower() == "true"
+
+
 def get_client_ip(request: Request) -> str | None:
     cf_ip = request.headers.get("CF-Connecting-IP")
     forwarded_for = request.headers.get("X-Forwarded-For")
@@ -28,9 +36,14 @@ def get_client_ip(request: Request) -> str | None:
 
 def verify_turnstile_token(token: str | None, request: Request) -> None:
     secret_key = get_turnstile_secret_key()
-    if not secret_key or secret_key.startswith("your_"):
+    if (
+        not is_turnstile_enabled()
+        or not is_turnstile_required()
+        or not secret_key
+        or secret_key.startswith("your_")
+    ):
         warnings.warn(
-            "Turnstile is not configured with a real TURNSTILE_SECRET_KEY; CAPTCHA verification is bypassed.",
+            "Turnstile is disabled, optional, or not configured; CAPTCHA verification is bypassed.",
             RuntimeWarning,
             stacklevel=2,
         )

@@ -40,7 +40,10 @@ export default function TurnstileWidget({ action, resetKey, onTokenChange }) {
   const widgetIdRef = useRef(null);
   const [loadError, setLoadError] = useState('');
   const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
-  const isTurnstileEnabled = Boolean(siteKey) && !siteKey.startsWith('your_');
+  const isTurnstileEnabled = import.meta.env.VITE_TURNSTILE_ENABLED === 'true'
+    && import.meta.env.VITE_TURNSTILE_REQUIRED === 'true'
+    && Boolean(siteKey)
+    && !siteKey.startsWith('your_');
 
   useEffect(() => {
     let cancelled = false;

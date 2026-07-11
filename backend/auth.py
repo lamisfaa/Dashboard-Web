@@ -186,6 +186,18 @@ def get_frontend_url() -> str:
     return os.getenv("FRONTEND_URL", "http://localhost:5173").strip().rstrip("/")
 
 
+def is_configured_admin_email(email: str) -> bool:
+    admin_emails = {
+        value.strip().lower()
+        for value in os.getenv("ADMIN_EMAILS", "").split(",")
+        if value.strip()
+    }
+    admin_email = os.getenv("ADMIN_EMAIL", "").strip().lower()
+    if admin_email:
+        admin_emails.add(admin_email)
+    return normalize_email(email) in admin_emails
+
+
 def get_google_recovery_url() -> str:
     return "https://accounts.google.com/signin/recovery"
 
@@ -541,9 +553,24 @@ def find_or_create_google_user(claims: dict):
     email = normalize_email(claims["email"])
     full_name = (claims.get("name") or email.split("@")[0]).strip()
     email_verified = 1 if claims.get("email_verified") else 0
+    role = "admin" if is_configured_admin_email(email) else "user"
 
     existing_google_user = get_user_by_google_sub(google_sub)
     if existing_google_user:
+        if role == "admin" and existing_google_user["role"] != "admin":
+            with get_connection() as connection:
+                connection.execute(
+                    """
+                    UPDATE users
+                    SET role = 'admin',
+                        is_active = 1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (existing_google_user["id"],),
+                )
+                connection.commit()
+            return get_user_by_id(existing_google_user["id"])
         return existing_google_user
 
     existing_email_user = get_user_by_email(email)
@@ -557,11 +584,19 @@ def find_or_create_google_user(claims: dict):
                         WHEN auth_provider = 'password' THEN 'password_google'
                         ELSE auth_provider
                     END,
+                    role = CASE
+                        WHEN ? THEN 'admin'
+                        ELSE role
+                    END,
+                    is_active = CASE
+                        WHEN ? THEN 1
+                        ELSE is_active
+                    END,
                     email_verified = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
-                (google_sub, email_verified, existing_email_user["id"]),
+                (google_sub, role == "admin", role == "admin", email_verified, existing_email_user["id"]),
             )
             connection.commit()
         return get_user_by_id(existing_email_user["id"])
@@ -575,16 +610,18 @@ def find_or_create_google_user(claims: dict):
                 full_name,
                 email,
                 password_hash,
+                role,
                 auth_provider,
                 google_sub,
                 email_verified
             )
-            VALUES (?, ?, ?, 'google', ?, ?)
+            VALUES (?, ?, ?, ?, 'google', ?, ?)
             """,
             (
                 full_name,
                 email,
                 hash_password(secrets.token_urlsafe(32)),
+                role,
                 google_sub,
                 email_verified,
             ),

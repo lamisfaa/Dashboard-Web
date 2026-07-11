@@ -98,15 +98,29 @@ def seed_admin_user(connection):
     admin_password = os.getenv("ADMIN_PASSWORD", "")
     admin_name = os.getenv("ADMIN_FULL_NAME", "Dashboard Admin").strip() or "Dashboard Admin"
 
-    if not admin_email or not admin_password:
+    if not admin_email:
         return
-
-    from security import hash_password
 
     existing_user = connection.execute(
         "SELECT id FROM users WHERE email = ?",
         (admin_email,),
     ).fetchone()
+
+    if not admin_password:
+        if existing_user:
+            connection.execute(
+                """
+                UPDATE users
+                SET role = 'admin',
+                    is_active = 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (existing_user["id"],),
+            )
+        return
+
+    from security import hash_password
 
     password_hash = hash_password(admin_password)
     if existing_user:

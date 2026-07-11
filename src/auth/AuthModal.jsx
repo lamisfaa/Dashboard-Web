@@ -16,7 +16,10 @@ const initialForm = {
 const emailPattern = /^\S+@\S+\.\S+$/;
 const gmailPattern = /^[^\s@]+@gmail\.com$/i;
 const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
-const isTurnstileEnabled = Boolean(turnstileSiteKey) && !turnstileSiteKey.startsWith('your_');
+const isTurnstileEnabled = import.meta.env.VITE_TURNSTILE_ENABLED === 'true'
+  && import.meta.env.VITE_TURNSTILE_REQUIRED === 'true'
+  && Boolean(turnstileSiteKey)
+  && !turnstileSiteKey.startsWith('your_');
 
 export default function AuthModal({ isOpen, mode, onModeChange, onClose, onAuthenticated, requestedLabel, resetEmail }) {
   const {
