@@ -21,12 +21,15 @@ def get_database_status() -> dict:
     return {
         "path": str(DB_PATH),
         "exists": DB_PATH.exists(),
+        "directory_exists": DB_PATH.parent.exists(),
+        "disk_mounted": os.path.ismount(DB_PATH.parent),
         "user_count": user_count,
         "is_persistent_path": str(DB_PATH).startswith("/app/backend/data/"),
     }
 
 
 def init_db():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with get_connection() as connection:
         connection.execute(
             """

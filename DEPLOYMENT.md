@@ -73,7 +73,8 @@ The health response should include:
   "email_configured": true,
   "database": {
     "path": "/app/backend/data/users.db",
-    "is_persistent_path": true
+    "is_persistent_path": true,
+    "disk_mounted": true
   }
 }
 ```
