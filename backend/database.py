@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = Path(os.getenv("USER_DB_PATH", BASE_DIR / "users.db"))
+DB_PATH = Path(os.getenv("USER_DB_PATH", BASE_DIR / "data" / "users.db"))
 
 
 def get_connection():
@@ -12,6 +12,18 @@ def get_connection():
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     return connection
+
+
+def get_database_status() -> dict:
+    with get_connection() as connection:
+        user_count = connection.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
+
+    return {
+        "path": str(DB_PATH),
+        "exists": DB_PATH.exists(),
+        "user_count": user_count,
+        "is_persistent_path": str(DB_PATH).startswith("/app/backend/data/"),
+    }
 
 
 def init_db():

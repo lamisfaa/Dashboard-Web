@@ -33,3 +33,4 @@ dist-ssr
 __pycache__/
 *.py[cod]
 backend/users.db
+backend/data/

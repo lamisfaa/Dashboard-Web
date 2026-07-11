@@ -10,7 +10,19 @@ This project is intended to deploy as:
 1. Open Render and create a new Blueprint from the GitHub repo.
 2. Render will read `render.yaml` and create `dashboard-web-backend`.
 3. Use the free plan for the demo.
-4. Add required environment variables:
+4. Confirm the backend has a persistent disk mounted at:
+
+```text
+/app/backend/data
+```
+
+SQLite users are stored at:
+
+```text
+/app/backend/data/users.db
+```
+
+5. Add required environment variables:
 
 ```text
 GEMINI_API_KEY=your Gemini key
@@ -71,7 +83,11 @@ The health response should include:
 
 ```json
 {
-  "email_configured": true
+  "email_configured": true,
+  "database": {
+    "path": "/app/backend/data/users.db",
+    "is_persistent_path": true
+  }
 }
 ```
 
