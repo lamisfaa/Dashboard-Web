@@ -4,6 +4,7 @@ import random
 import re
 import secrets
 import smtplib
+import socket
 import ssl
 import urllib.error
 import urllib.parse
@@ -208,9 +209,38 @@ def create_reset_otp() -> str:
     return f"{random.SystemRandom().randint(0, 999999):06d}"
 
 
+class IPv4SMTP(smtplib.SMTP):
+    def _get_socket(self, host, port, timeout):
+        last_error = None
+        for family, socktype, proto, _, address in socket.getaddrinfo(
+            host,
+            port,
+            socket.AF_INET,
+            socket.SOCK_STREAM,
+        ):
+            sock = socket.socket(family, socktype, proto)
+            sock.settimeout(timeout)
+            try:
+                sock.connect(address)
+                return sock
+            except OSError as exc:
+                last_error = exc
+                sock.close()
+        if last_error:
+            raise last_error
+        raise OSError(f"Could not resolve IPv4 address for {host}.")
+
+
+class IPv4SMTP_SSL(smtplib.SMTP_SSL):
+    def _get_socket(self, host, port, timeout):
+        raw_socket = IPv4SMTP._get_socket(self, host, port, timeout)
+        return self.context.wrap_socket(raw_socket, server_hostname=host)
+
+
 def send_password_reset_email(email: str, full_name: str, otp: str):
     smtp_host = os.getenv("SMTP_HOST", "").strip()
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_use_ssl = os.getenv("SMTP_USE_SSL", "").strip().lower() in {"1", "true", "yes"}
     smtp_username = os.getenv("SMTP_USERNAME", "").strip()
     smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
     email_from = get_email_from_address()
@@ -239,8 +269,15 @@ def send_password_reset_email(email: str, full_name: str, otp: str):
 
     context = ssl.create_default_context()
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
-            server.starttls(context=context)
+        smtp_class = IPv4SMTP_SSL if smtp_use_ssl or smtp_port == 465 else IPv4SMTP
+        server = (
+            smtp_class(smtp_host, smtp_port, timeout=15, context=context)
+            if smtp_class is IPv4SMTP_SSL
+            else smtp_class(smtp_host, smtp_port, timeout=15)
+        )
+        with server:
+            if smtp_class is IPv4SMTP:
+                server.starttls(context=context)
             server.login(smtp_username, smtp_password)
             server.send_message(message)
     except (OSError, smtplib.SMTPException) as exc:

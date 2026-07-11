@@ -44,6 +44,13 @@ SMTP_PASSWORD=your_16_character_gmail_app_password
 EMAIL_FROM=your_sender_email@gmail.com
 ```
 
+If port `587` fails on the host, switch to Gmail SSL SMTP:
+
+```text
+SMTP_PORT=465
+SMTP_USE_SSL=true
+```
+
 `SMTP_PASSWORD` must be a Gmail App Password, not the normal Gmail login
 password. In Google Account settings, enable 2-Step Verification, then create
 an App Password for Mail.
