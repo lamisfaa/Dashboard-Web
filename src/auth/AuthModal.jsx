@@ -15,6 +15,8 @@ const initialForm = {
 
 const emailPattern = /^\S+@\S+\.\S+$/;
 const gmailPattern = /^[^\s@]+@gmail\.com$/i;
+const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
+const isTurnstileEnabled = Boolean(turnstileSiteKey) && !turnstileSiteKey.startsWith('your_');
 
 export default function AuthModal({ isOpen, mode, onModeChange, onClose, onAuthenticated, requestedLabel, resetEmail }) {
   const {
@@ -71,7 +73,7 @@ export default function AuthModal({ isOpen, mode, onModeChange, onClose, onAuthe
 
   const isSignup = mode === 'signup';
   const isPasswordReset = resetStep !== 'auth';
-  const isTurnstileConfigured = Boolean(import.meta.env.VITE_TURNSTILE_SITE_KEY);
+  const isTurnstileConfigured = isTurnstileEnabled;
   const isLoginCaptchaRequired = !isSignup && resetStep === 'auth' && loginFailedAttempts >= 3;
   const isPasswordResetCaptchaRequired = resetStep === 'request';
   const isCaptchaRequired = isTurnstileConfigured

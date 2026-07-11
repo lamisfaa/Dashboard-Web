@@ -40,13 +40,14 @@ export default function TurnstileWidget({ action, resetKey, onTokenChange }) {
   const widgetIdRef = useRef(null);
   const [loadError, setLoadError] = useState('');
   const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
+  const isTurnstileEnabled = Boolean(siteKey) && !siteKey.startsWith('your_');
 
   useEffect(() => {
     let cancelled = false;
     onTokenChange('');
 
-    if (!siteKey) {
-      setLoadError('CAPTCHA site key is missing.');
+    if (!isTurnstileEnabled) {
+      setLoadError('');
       return undefined;
     }
 
@@ -82,7 +83,11 @@ export default function TurnstileWidget({ action, resetKey, onTokenChange }) {
         widgetIdRef.current = null;
       }
     };
-  }, [action, onTokenChange, resetKey, siteKey]);
+  }, [action, isTurnstileEnabled, onTokenChange, resetKey, siteKey]);
+
+  if (!isTurnstileEnabled) {
+    return null;
+  }
 
   return (
     <div className="auth-turnstile">
