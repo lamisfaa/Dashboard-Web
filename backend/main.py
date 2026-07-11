@@ -37,6 +37,9 @@ def startup_event():
 
 
 def get_cors_origins() -> list[str]:
+    default_origins = [
+        "https://projex-dashboard-web.vercel.app",
+    ]
     raw_origins = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
     origins = [
         origin.strip().rstrip("/")
@@ -47,6 +50,10 @@ def get_cors_origins() -> list[str]:
     frontend_url = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
     if frontend_url and frontend_url not in origins:
         origins.append(frontend_url)
+
+    for origin in default_origins:
+        if origin not in origins:
+            origins.append(origin)
 
     return origins or ["*"]
 
