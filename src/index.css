@@ -4186,6 +4186,45 @@ button.overview-kpi-card {
   margin-top: 6px;
 }
 
+.admin-workbook-floating {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1200;
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+.admin-workbook-floating-btn {
+  border: 1px solid rgba(255, 46, 147, 0.45);
+  border-radius: 8px;
+  background: var(--pink-gradient);
+  box-shadow: var(--glow-pink);
+  color: #ffffff;
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-size: 14px;
+  font-weight: 800;
+  padding: 14px 18px;
+  white-space: nowrap;
+}
+
+.admin-workbook-floating-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.admin-workbook-floating-error {
+  max-width: 320px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+  font-size: 12px;
+  padding: 10px 12px;
+}
+
 .admin-section-heading {
   display: flex;
   align-items: center;

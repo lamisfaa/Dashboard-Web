@@ -3,7 +3,7 @@ import initialData from './data.json';
 import Chatbot from './Chatbot';
 import AuthModal from './auth/AuthModal';
 import { useAuth } from './auth/useAuth';
-import { API_BASE_URL } from './api';
+import { API_BASE_URL, parseApiError } from './api';
 import {
   DashboardIcon,
   ProjectsIcon,
@@ -57,7 +57,7 @@ import {
 } from './utils/dashboardHelpers';
 import AdminManagement from './admin/AdminManagement';
 function App() {
-  const { user, isAuthenticated, logout, updateProfile } = useAuth();
+  const { user, isAuthenticated, logout, updateProfile, authFetch } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [dashboardData, setDashboardData] = useState(initialData);
   const [dataError, setDataError] = useState('');
@@ -74,6 +74,8 @@ function App() {
   const [adminActivity, setAdminActivity] = useState(() => readAdminActivity());
   const [isAdminPageEditorOpen, setIsAdminPageEditorOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [workbookDownloading, setWorkbookDownloading] = useState(false);
+  const [workbookDownloadError, setWorkbookDownloadError] = useState('');
 
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('projex-theme');
@@ -243,6 +245,31 @@ function App() {
       localStorage.setItem(ADMIN_ACTIVITY_KEY, JSON.stringify(nextActivities));
       return nextActivities;
     });
+  };
+
+  const downloadWorkbook = async () => {
+    setWorkbookDownloading(true);
+    setWorkbookDownloadError('');
+    try {
+      const response = await authFetch(`${API_BASE_URL}/api/admin/workbook`);
+      if (!response.ok) {
+        throw new Error(await parseApiError(response, 'Could not download workbook.'));
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'sample_data.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      setWorkbookDownloadError(err.message || 'Could not download workbook.');
+    } finally {
+      setWorkbookDownloading(false);
+    }
   };
 
   // Load datasets
@@ -1972,6 +1999,22 @@ function App() {
           <Chatbot initialQuery={initialChatQuery} clearInitialQuery={() => setInitialChatQuery('')} />
         </div>
       </div>
+
+      {activeTab === 'admin' && isAdmin && (
+        <div className="admin-workbook-floating">
+          {workbookDownloadError && (
+            <div className="admin-workbook-floating-error">{workbookDownloadError}</div>
+          )}
+          <button
+            className="admin-workbook-floating-btn"
+            type="button"
+            onClick={downloadWorkbook}
+            disabled={workbookDownloading}
+          >
+            {workbookDownloading ? 'Downloading Excel...' : 'Download Excel Sheet'}
+          </button>
+        </div>
+      )}
 
       <AuthModal
         isOpen={authOpen}
