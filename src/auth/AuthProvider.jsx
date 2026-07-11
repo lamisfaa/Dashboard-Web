@@ -3,10 +3,12 @@ import { API_BASE_URL, parseApiError } from '../api';
 import { AuthContext } from './AuthContext';
 
 const SESSION_KEY = 'projex-auth-session';
+const legacyStorage = typeof window !== 'undefined' ? window.localStorage : null;
+const sessionStorageApi = typeof window !== 'undefined' ? window.sessionStorage : null;
 
 const readJson = (key, fallback) => {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = sessionStorageApi?.getItem(key);
     return raw ? JSON.parse(raw) : fallback;
   } catch {
     return fallback;
@@ -28,12 +30,14 @@ export function AuthProvider({ children }) {
   const [authError, setAuthError] = useState('');
 
   const persistSession = useCallback((nextSession) => {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
+    sessionStorageApi?.setItem(SESSION_KEY, JSON.stringify(nextSession));
+    legacyStorage?.removeItem(SESSION_KEY);
     setSession(nextSession);
   }, []);
 
   const clearSession = useCallback(() => {
-    localStorage.removeItem(SESSION_KEY);
+    sessionStorageApi?.removeItem(SESSION_KEY);
+    legacyStorage?.removeItem(SESSION_KEY);
     setSession(null);
   }, []);
 
@@ -237,7 +241,8 @@ export function AuthProvider({ children }) {
         ...currentSession,
         user: updatedUser
       };
-      localStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
+      sessionStorageApi?.setItem(SESSION_KEY, JSON.stringify(nextSession));
+      legacyStorage?.removeItem(SESSION_KEY);
       return nextSession;
     });
     return updatedUser;
